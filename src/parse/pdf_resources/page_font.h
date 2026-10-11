@@ -220,8 +220,11 @@ namespace pdflib
     // all of them with a substring test per entry, and the call sites below ask
     // per glyph. font_name and base_font are both fixed once init_font_name()
     // has run, so each resolution is computed at most once per font resource.
-    // matched_base_font_ backs the call sites that fall back to /BaseFont;
-    // matched_font_name_ backs get_character_from_encoding(), which must not.
+    // matched_font_name_ is the match of the name-derived font_name alone;
+    // matched_base_font_ keeps a successful font_name match and falls back to
+    // /BaseFont only when font_name matches no built-in font. The latter backs
+    // the width/bbox lookups and the built-in-font decoding in
+    // get_correct_character().
     bool            matched_font_name_resolved_ = false;
     base_font_match matched_font_name_;
     bool            matched_base_font_resolved_ = false;
@@ -825,15 +828,21 @@ namespace pdflib
       {
         return cmap_numb_to_char.at(c);
       }
-    else if(matched_font_name().font)
+    else if(matched_base_font().font)
       {
-        // check if the font-name is registered as a 'special' font, eg
-        // the TeX mathematical fonts. Note this deliberately does not fall back
-        // to /BaseFont the way the metrics lookups do.
+        // check if the font is registered as a 'special' font, eg the TeX
+        // mathematical fonts. The font-name alone is not enough: a font dict
+        // carrying the (obsolete) /Name entry reports that label as its
+        // font-name (eg '/F3'), so /BaseFont is consulted when the font-name
+        // matches no built-in font, as the width/bbox lookups above do. A
+        // successful font-name match is kept, and the one selected match
+        // decides the condition, the name and the metrics below.
 
-        const std::string& fontname = matched_font_name().name;
+        const base_font_match& match = matched_base_font();
 
-        auto& fm = *(matched_font_name().font);
+        const std::string& fontname = match.name;
+
+        auto& fm = *(match.font);
 
         // A known legacy symbol font may falsely declare WinAnsi while using
         // font-specific character codes. Its curated map is authoritative
